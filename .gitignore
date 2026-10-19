@@ -1,0 +1,5 @@
+# Relay state (Actions cache only, see README.md)
+.uptime-relay/
+__pycache__/
+*.pyc
+.env

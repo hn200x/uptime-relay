@@ -1,0 +1,82 @@
+# UptimeRobot -> Telegram relay (see README.md)
+#
+# UptimeRobot's free plan alerts by email only, so this workflow reads the
+# monitors every 5 minutes with the READ-ONLY API key and posts to the Telegram
+# bot when a monitor goes DOWN (once per outage) or comes back up (once).
+#
+# Timing: GitHub may delay scheduled runs (often by several minutes at busy
+# times) or skip them, and the schedule is best effort. UptimeRobot's free plan
+# checks every 5 minutes anyway, so 5 minutes is the finest useful interval.
+#
+# State (last-known status per monitor) lives in the Actions cache only: each
+# run restores the newest `uptime-relay-state-*` entry and saves a new one, and
+# older entries are pruned (the newest 5 are kept).
+# A cache miss reseeds silently, except monitors that are down right now.
+#
+# This repo is public, so the logs show counts only (no monitor names or URLs).
+# Without the UPTIMEROBOT_API_KEY secret the run logs one line and exits 0.
+#
+# Secrets: UPTIMEROBOT_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID.
+# Test: gh workflow run uptime-relay.yml -f dry_run=true
+name: uptime-relay
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Report what would be sent (counts only); send nothing and keep the stored state"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: write # prune old state cache entries
+
+concurrency:
+  group: uptime-relay
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore last-known state
+        uses: actions/cache/restore@v4
+        with:
+          path: .uptime-relay
+          key: uptime-relay-state-${{ github.run_id }}
+          restore-keys: uptime-relay-state-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Relay state changes
+        env:
+          UPTIMEROBOT_API_KEY: ${{ secrets.UPTIMEROBOT_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python -I uptime_relay.py --state .uptime-relay/state.json $DRY_RUN
+
+      - name: Save state
+        if: always() && hashFiles('.uptime-relay/state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .uptime-relay
+          key: uptime-relay-state-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Prune old state entries
+        if: always() && hashFiles('.uptime-relay/state.json') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh cache list --key uptime-relay-state- --sort created_at --order desc --limit 100 --json id --jq '.[5:][].id' |
+            while read -r id; do gh cache delete "$id" >/dev/null; done
