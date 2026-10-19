@@ -82,6 +82,10 @@ The last-known status of each monitor (up or down, since when, and the time of t
 
 GitHub may delay scheduled runs, sometimes by several minutes, or skip one at busy times. Expect an alert within about 5 to 15 minutes of UptimeRobot noticing.
 
+## The GitHub schedule is a backup
+
+In practice GitHub ran the `*/5` schedule far less often than every 5 minutes (twice in the first ten hours), so the relay's main runner is a local scheduler on the maintainer's machine, running the same script every 5 minutes with its own state file (`--state <path>`) and the same three environment variables. The scheduled workflow here stays on as a slow backup for when that machine is off. Because the two keep separate state, a change can occasionally be announced twice, once by each.
+
 ## Keep-alive
 
 GitHub disables scheduled workflows in a public repo after 60 days without repository activity. `.github/workflows/keep-alive.yml` runs on the 1st of each month (06:17 UTC) and commits the date to `KEEPALIVE`, which counts as activity. If the relay ever stops, check Actions → uptime-relay for a "disabled" banner and re-enable it (`gh workflow enable uptime-relay.yml`).
