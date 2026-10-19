@@ -84,7 +84,7 @@ GitHub may delay scheduled runs, sometimes by several minutes, or skip one at bu
 
 ## The GitHub schedule is a backup
 
-In practice GitHub ran the `*/5` schedule far less often than every 5 minutes (twice in the first ten hours), so the relay's main runner is a local scheduler on the maintainer's machine, running the same script every 5 minutes with its own state file (`--state <path>`) and the same three environment variables. The scheduled workflow here stays on as a slow backup for when that machine is off. Because the two keep separate state, a change can occasionally be announced twice, once by each.
+In practice GitHub ran the `*/5` schedule far less often than every 5 minutes (twice in the first ten hours), so the relay's main runner is a local scheduler on the maintainer's machine, running the same script every 5 minutes with its own state file (`--state <path>`) and the same three environment variables. The scheduled workflow here stays on as a slow backup for when that machine is off. Because the two keep separate state, expect most changes to be announced twice: promptly by the local runner, then again by the next GitHub run, which can be hours later.
 
 ## Keep-alive
 
